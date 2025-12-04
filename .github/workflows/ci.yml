@@ -1,71 +1,75 @@
 name: CI/CD Pipeline
 
+permissions:
+  contents: read
+  packages: write
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
 jobs:
-test:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout
-uses: actions/checkout@v4
+  test:
+    runs-on: ubuntu-latest
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-- name: Setup Node
-uses: actions/setup-node@v4
-with:
-node-version: '18'
-cache: 'npm'
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
 
+      - name: Install
+        run: npm ci
+        working-directory: my-app
 
-- name: Install
-run: npm ci
+      - name: Lint
+        run: npm run lint
+        working-directory: my-app
 
+      - name: Test
+        run: npm test
+        working-directory: my-app
 
-- name: Lint
-run: npm run lint
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: my-app/coverage/
 
+  build:
+    runs-on: ubuntu-latest
+    needs: test
 
-- name: Test
-run: npm test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-- name: Upload coverage
-uses: actions/upload-artifact@v4
-with:
-name: coverage
-path: coverage/
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/node-cicd-starter:${{ github.sha }} my-app/
 
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${{ github.repository }}/node-cicd-starter:${{ github.sha }}
 
-build:
-runs-on: ubuntu-latest
-needs: test
-steps:
-- name: Checkout
-uses: actions/checkout@v4
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
 
-
-- name: Login to GHCR
-uses: docker/login-action@v3
-with:
-registry: ghcr.io
-username: ${{ github.actor }}
-password: ${{ secrets.GITHUB_TOKEN }}
-
-
-- name: Build image
-run: |
-docker build -t ghcr.io/${{ github.repository }}/node-cicd-starter:${{ github.sha }} .
-
-
-- name: Push image
-run: |
-docker push ghcr.io/${{ github.repository }}/node-cicd-starter:${{ github.sha }}
-
-
-deploy:
-runs-on: ubuntu-latest
-needs: build
-if: github.ref == 'refs/heads/main'
-steps:
-- name: Deploy placeholder
-run: |
-echo "Replace this step with your deploy command (kubectl/ssh/ecs/others)"
+    steps:
+      - name: Deploy placeholder
+        run: echo "Replace this step with your deploy command (kubectl/ssh/ecs/etc)"
